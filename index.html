@@ -54,7 +54,14 @@
     let isListening = false;
     const apiKey = "sk-81c4558c011d4679aebbb3f8b99d9206";
 
-    // Разрешение на озвучку через клик
+    // Speech Recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ru-RU';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    // Разрешение на озвучку
     document.body.addEventListener('click', () => {
       const dummy = new SpeechSynthesisUtterance('');
       speechSynthesis.speak(dummy);
@@ -81,42 +88,58 @@
         speechSynthesis.speak(utter);
       }, 100);
     }
+
     async function sendToAssistant(text) {
-  appendMessage(text, 'user');
+      appendMessage(text, 'user');
 
-  try {
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: "Ты — голосовой ассистент по имени Жарвис. Отвечай кратко, дружелюбно, по делу." },
-          { role: "user", content: text }
-        ]
-      })
-    });
+      try {
+        const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+              { role: "system", content: "Ты — голосовой ассистент по имени Жарвис. Отвечай кратко, дружелюбно и по делу." },
+              { role: "user", content: text }
+            ]
+          })
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (!response.ok) {
-      console.error("Ошибка DeepSeek:", data);
-      appendMessage("Произошла ошибка при запросе к DeepSeek.", 'assistant');
-      return;
+        if (!response.ok) {
+          console.error("Ошибка DeepSeek:", data);
+          appendMessage("Произошла ошибка при запросе к DeepSeek.", 'assistant');
+          return;
+        }
+
+        const reply = data.choices?.[0]?.message?.content || "Пустой ответ.";
+        appendMessage(reply, 'assistant');
+        speak(reply);
+        listenAfterDelay();
+
+      } catch (err) {
+        console.error("Ошибка запроса:", err);
+        appendMessage("Ошибка соединения с DeepSeek API.", 'assistant');
+      }
     }
 
-    const reply = data.choices?.[0]?.message?.content || "Пустой ответ.";
-    appendMessage(reply, 'assistant');
-    speak(reply);
-    listenAfterDelay();
+    function listenAfterDelay() {
+      setTimeout(() => {
+        startListening();
+      }, 6000);
+    }
 
-  } catch (err) {
-    console.error("Ошибка запроса:", err);
-    appendMessage("Ошибка соединения с DeepSeek API.", 'assistant');
-  }
+    recognition.onresult = event => {
+      const result = event.results[0][0].transcript;
+      console.log("Распознано:", result);
+      if (result.toLowerCase().includes('жарвис')) {
+        const cleaned = result.replace(/жарвис/gi, '').trim();
+        if (cleaned) sendToAssistant(cleaned);
+      }
     };
 
     recognition.onend = () => {
@@ -133,4 +156,3 @@
 
 </body>
 </html>
-
