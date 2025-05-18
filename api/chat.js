@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   const GIGACHAT_TOKEN = process.env.GIGACHAT_TOKEN;
 
   if (!GIGACHAT_TOKEN) {
-    return res.status(500).json({ error: 'GIGACHAT_TOKEN не задан в переменных окружения' });
+    return res.status(500).json({ error: 'GIGACHAT_TOKEN не задан' });
   }
 
   if (req.method !== 'POST') {
@@ -23,15 +23,22 @@ export default async function handler(req, res) {
       }),
     });
 
-    const data = await response.json();
+    const text = await response.text();
 
-    if (data.choices && data.choices.length > 0) {
-      return res.status(200).json({ message: data.choices[0].message.content });
-    } else {
-      return res.status(500).json({ error: 'Пустой ответ от GigaChat' });
+    // Попытаемся распарсить JSON
+    try {
+      const data = JSON.parse(text);
+      if (data.error) {
+        return res.status(400).json({ error: data.error.message || data.error });
+      }
+      if (!data.choices || data.choices.length === 0) {
+        return res.status(500).json({ error: 'Ответ GigaChat пуст' });
+      }
+      return res.status(200).json(data);
+    } catch (jsonErr) {
+      return res.status(500).json({ error: 'Ошибка JSON: ' + jsonErr.message, raw: text });
     }
-
-  } catch (error) {
-    return res.status(500).json({ error: 'Ошибка запроса: ' + error.message });
+  } catch (err) {
+    return res.status(500).json({ error: 'Ошибка запроса к GigaChat: ' + err.message });
   }
 }
