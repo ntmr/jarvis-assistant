@@ -25,7 +25,6 @@ export default async function handler(req, res) {
 
     const text = await response.text();
 
-    // Попытаемся распарсить JSON
     try {
       const data = JSON.parse(text);
       if (data.error) {
