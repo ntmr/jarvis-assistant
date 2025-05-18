@@ -81,47 +81,42 @@
         speechSynthesis.speak(utter);
       }, 100);
     }
-
     async function sendToAssistant(text) {
-      appendMessage(text, 'user');
-      const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [{ role: "user", content: text }]
-        })
-      });
+  appendMessage(text, 'user');
 
-      const data = await response.json();
-      const reply = data.choices?.[0]?.message?.content || "Ошибка ответа.";
-      appendMessage(reply, 'assistant');
-      speak(reply);
-      listenAfterDelay();
+  try {
+    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: "Ты — голосовой ассистент по имени Жарвис. Отвечай кратко, дружелюбно, по делу." },
+          { role: "user", content: text }
+        ]
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Ошибка DeepSeek:", data);
+      appendMessage("Произошла ошибка при запросе к DeepSeek.", 'assistant');
+      return;
     }
 
-    function listenAfterDelay() {
-      setTimeout(() => {
-        startListening();
-      }, 6000);
-    }
+    const reply = data.choices?.[0]?.message?.content || "Пустой ответ.";
+    appendMessage(reply, 'assistant');
+    speak(reply);
+    listenAfterDelay();
 
-    // Speech recognition
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ru-RU';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    recognition.onresult = event => {
-      const result = event.results[0][0].transcript;
-      if (result.toLowerCase().includes('жарвис')) {
-        const cleaned = result.replace(/жарвис/gi, '').trim();
-        if (cleaned) sendToAssistant(cleaned);
-      }
+  } catch (err) {
+    console.error("Ошибка запроса:", err);
+    appendMessage("Ошибка соединения с DeepSeek API.", 'assistant');
+  }
     };
 
     recognition.onend = () => {
