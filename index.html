@@ -2,56 +2,69 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Жарвис</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Жарвис Ассистент</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
       margin: 0; padding: 0;
-      background: #111; color: #fff;
-      display: flex; flex-direction: column;
-      align-items: center;
-      justify-content: flex-end;
+      background: #121212;
+      color: #eee;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
       height: 100vh;
     }
     #chat {
-      width: 100%; max-width: 480px;
-      padding: 1rem;
-      box-sizing: border-box;
-      overflow-y: auto;
       flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
     .message {
-      margin: 0.5rem 0;
-      padding: 0.5rem;
-      border-radius: 12px;
-      max-width: 80%;
-    }
-    .user {
-      background: #222; align-self: flex-end; margin-left: auto;
+      max-width: 75%;
+      padding: 10px 15px;
+      border-radius: 20px;
+      font-size: 16px;
+      line-height: 1.3;
+      user-select: none;
     }
     .assistant {
-      background: #333; align-self: flex-start; margin-right: auto;
+      background: #333;
+      align-self: flex-start;
+    }
+    .user {
+      background: #555;
+      align-self: flex-end;
     }
     #mute-btn {
       position: fixed;
-      top: 10px; right: 10px;
-      background: #444; color: white;
-      border: none; padding: 0.5rem;
+      top: 15px; right: 15px;
+      background: #444;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      font-size: 14px;
       border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
 
-  <div id="chat"></div>
   <button id="mute-btn">🔊 Звук ВКЛ</button>
+  <div id="chat"></div>
 
   <script>
     const chat = document.getElementById('chat');
     const muteBtn = document.getElementById('mute-btn');
     let isMuted = false;
     let isListening = false;
+
+    // Вставь сюда свой API ключ DeepSeek
     const apiKey = "sk-81c4558c011d4679aebbb3f8b99d9206";
 
     // Speech Recognition
@@ -61,39 +74,47 @@
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    // Разрешение на озвучку
+    // Простой способ активировать озвучку на iOS/Chrome (по клику)
     document.body.addEventListener('click', () => {
-      const dummy = new SpeechSynthesisUtterance('');
-      speechSynthesis.speak(dummy);
-    });
+      speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+    }, { once: true });
 
     muteBtn.onclick = () => {
       isMuted = !isMuted;
-      muteBtn.textContent = isMuted ? '🔇 Звук ВЫКЛ' : '🔊 Звук ВКЛ';
+      muteBtn.textContent = isMuted ? "🔇 Звук ВЫКЛ" : "🔊 Звук ВКЛ";
     };
 
     function appendMessage(text, role) {
-      const msg = document.createElement('div');
-      msg.className = `message ${role}`;
-      msg.textContent = text;
-      chat.appendChild(msg);
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      div.textContent = text;
+      chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
 
     function speak(text) {
       if (isMuted) return;
+      if (!text) return;
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'ru-RU';
-      setTimeout(() => {
-        speechSynthesis.speak(utter);
-      }, 100);
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utter);
+
+      // При звуке слушаем пользовательский ответ, если есть громкие звуки — прекратим озвучку и начнем слушать
+      utter.onstart = () => {
+        isListening = false;
+        recognition.abort();
+      };
+      utter.onend = () => {
+        startListening();
+      };
     }
 
     async function sendToAssistant(text) {
       appendMessage(text, 'user');
 
       try {
-        const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        const response = await fetch("https://api.deepseek.com/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -108,50 +129,64 @@
           })
         });
 
-        const data = await response.json();
-
         if (!response.ok) {
-          console.error("Ошибка DeepSeek:", data);
-          appendMessage("Произошла ошибка при запросе к DeepSeek.", 'assistant');
+          const err = await response.json();
+          appendMessage("Ошибка сервера: " + (err.message || "Неизвестная ошибка"), 'assistant');
           return;
         }
 
-        const reply = data.choices?.[0]?.message?.content || "Пустой ответ.";
+        const data = await response.json();
+        const reply = data.choices?.[0]?.message?.content || "Я не получил ответ.";
         appendMessage(reply, 'assistant');
         speak(reply);
-        listenAfterDelay();
 
-      } catch (err) {
-        console.error("Ошибка запроса:", err);
-        appendMessage("Ошибка соединения с DeepSeek API.", 'assistant');
+      } catch (e) {
+        appendMessage("Ошибка сети или сервера.", 'assistant');
       }
     }
 
-    function listenAfterDelay() {
-      setTimeout(() => {
-        startListening();
-      }, 6000);
-    }
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.trim().toLowerCase();
+      console.log("Распознано: ", transcript);
+      if (transcript.includes('жарвис')) {
+        // Уберем ключевое слово "жарвис" из запроса
+        const cleanText = transcript.replace(/жарвис/gi, '').trim();
+        if (cleanText) {
+          sendToAssistant(cleanText);
+        } else {
+          appendMessage("Да?", "assistant");
+          speak("Да?");
+        }
+      }
+    };
 
-    recognition.onresult = event => {
-      const result = event.results[0][0].transcript;
-      console.log("Распознано:", result);
-      if (result.toLowerCase().includes('жарвис')) {
-        const cleaned = result.replace(/жарвис/gi, '').trim();
-        if (cleaned) sendToAssistant(cleaned);
+    recognition.onerror = (event) => {
+      console.error("Recognition error:", event.error);
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        appendMessage("Ошибка: доступ к микрофону запрещён.", "assistant");
       }
     };
 
     recognition.onend = () => {
-      if (!isListening) recognition.start();
+      if (!isListening) {
+        recognition.start();
+        isListening = true;
+      }
     };
 
     function startListening() {
-      isListening = true;
-      recognition.start();
+      if (isListening) return;
+      try {
+        recognition.start();
+        isListening = true;
+      } catch (e) {
+        console.error("Ошибка запуска распознавания:", e);
+      }
     }
 
+    // Начинаем слушать сразу при загрузке
     startListening();
+
   </script>
 
 </body>
