@@ -123,7 +123,7 @@
           body: JSON.stringify({
             model: "deepseek-chat",
             messages: [
-              { role: "system", content: "Ты — голосовой ассистент по имени Жарвис. Отвечай кратко, дружелюбно и по делу." },
+              { role: "system", content: "Ты — голосовой ассистент по имени Кот. Отвечай кратко, дружелюбно и по делу." },
               { role: "user", content: text }
             ]
           })
@@ -148,9 +148,9 @@
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.trim().toLowerCase();
       console.log("Распознано: ", transcript);
-      if (transcript.includes('жарвис')) {
-        // Уберем ключевое слово "жарвис" из запроса
-        const cleanText = transcript.replace(/жарвис/gi, '').trim();
+      if (transcript.includes('кот')) {
+        // Уберем ключевое слово "кот" из запроса
+        const cleanText = transcript.replace(/кот/gi, '').trim();
         if (cleanText) {
           sendToAssistant(cleanText);
         } else {
