@@ -1,207 +1,104 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Кот (замените "Кот" на любое ключевое слово)</title>
-  <style>
-    body {
-      margin: 0; padding: 0;
-      background: #121212;
-      color: #eee;
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .message {
-      max-width: 75%;
-      padding: 10px 15px;
-      border-radius: 20px;
-      font-size: 16px;
-      line-height: 1.3;
-      user-select: none;
-    }
-    .assistant {
-      background: #333;
-      align-self: flex-start;
-    }
-    .user {
-      background: #555;
-      align-self: flex-end;
-    }
-    #mute-btn {
-      position: fixed;
-      top: 15px; right: 15px;
-      background: #444;
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      font-size: 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      user-select: none;
-      z-index: 10;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Голосовой ассистент Кот</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #222; color: #eee; }
+  #chat { max-width: 600px; margin: auto; padding: 10px; }
+  .message { padding: 8px; margin: 6px 0; border-radius: 6px; max-width: 80%; }
+  .assistant { background: #444; text-align: left; }
+  .user { background: #0084ff; text-align: right; margin-left: auto; }
+  #micBtn { font-size: 24px; padding: 10px 20px; cursor: pointer; }
+  #muteBtn { position: fixed; top: 10px; right: 10px; cursor: pointer; background: #444; border: none; color: white; padding: 6px 12px; border-radius: 4px;}
+</style>
 </head>
 <body>
 
-  <button id="mute-btn">🔊 Звук ВКЛ</button>
-  <div id="chat"></div>
+<div id="chat"></div>
+<button id="micBtn">🎤 Говорить</button>
+<button id="muteBtn">🔊 Вкл/Выкл звук</button>
 
-  <script>
-    const chat = document.getElementById('chat');
-    const muteBtn = document.getElementById('mute-btn');
-    let isMuted = false;
-    let isListening = false;
+<script>
+  const chat = document.getElementById('chat');
+  const micBtn = document.getElementById('micBtn');
+  const muteBtn = document.getElementById('muteBtn');
 
-    // Замените на ваш ключ OpenAI
-    const apiKey = "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";
-
-    // Ключевое слово активации
-    const wakeWord = "кот";
-
-    // Speech Recognition
+  let isMuted = false;
+  let recognition;
+  let speechSynthesisUtterance;
+  
+  // Проверяем поддержку Web Speech API
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Ваш браузер не поддерживает распознавание речи');
+  } else {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Ваш браузер не поддерживает распознавание речи");
-    }
-    const recognition = new SpeechRecognition();
+    recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
-    recognition.continuous = false;
     recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
 
-    // Инициализация кнопки звука
-    muteBtn.onclick = () => {
-      isMuted = !isMuted;
-      muteBtn.textContent = isMuted ? "🔇 Звук ВЫКЛ" : "🔊 Звук ВКЛ";
-      if (isMuted) {
-        speechSynthesis.cancel();
-      }
-    };
-
-    // Добавление сообщения в чат
-    function appendMessage(text, role) {
-      const div = document.createElement('div');
-      div.className = `message ${role}`;
-      div.textContent = text;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    // Озвучка текста ассистента
-    function speak(text) {
-      if (isMuted || !text) return;
-      speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'ru-RU';
-      utter.onstart = () => {
-        isListening = false;
-        recognition.abort();
-      };
-      utter.onend = () => {
-        startListening();
-      };
-      speechSynthesis.speak(utter);
-    }
-
-    // Отправка текста в OpenAI и получение ответа
-    async function sendToAssistant(text) {
-      appendMessage(text, 'user');
-
-      try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: "gpt-3.5-turbo",
-            messages: [
-              { role: "system", content: "Ты — голосовой ассистент по имени Кот. Отвечай дружелюбно, по делу и кратко." },
-              { role: "user", content: text }
-            ],
-            max_tokens: 400,
-            temperature: 0.6,
-          })
-        });
-
-        if (!response.ok) {
-          const err = await response.json();
-          appendMessage("Ошибка сервера: " + (err.error?.message || "Неизвестная ошибка"), 'assistant');
-          return;
-        }
-
-        const data = await response.json();
-        const reply = data.choices?.[0]?.message?.content || "Я не получил ответ.";
-        appendMessage(reply, 'assistant');
-        speak(reply);
-
-      } catch (e) {
-        appendMessage("Ошибка сети или сервера.", 'assistant');
-      }
-    }
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.trim().toLowerCase();
-      console.log("Распознано: ", transcript);
-
-      if (transcript.includes(wakeWord)) {
-        const cleanText = transcript.replace(new RegExp(wakeWord, 'gi'), '').trim();
-        if (cleanText) {
-          sendToAssistant(cleanText);
-        } else {
-          appendMessage("Да?", "assistant");
-          speak("Да?");
-        }
-      }
+    recognition.onresult = async (event) => {
+      const text = event.results[0][0].transcript;
+      addMessage(text, 'user');
+      await sendToAssistant(text);
     };
 
     recognition.onerror = (event) => {
-      console.error("Recognition error:", event.error);
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        appendMessage("Ошибка: доступ к микрофону запрещён.", "assistant");
-      }
+      console.error('Speech recognition error', event.error);
     };
+  }
 
-    recognition.onend = () => {
-      if (!isListening) {
-        try {
-          recognition.start();
-          isListening = true;
-        } catch (e) {
-          console.error("Ошибка запуска распознавания:", e);
-        }
-      }
-    };
+  micBtn.onclick = () => {
+    recognition.start();
+  };
 
-    function startListening() {
-      if (isListening) return;
-      try {
-        recognition.start();
-        isListening = true;
-      } catch (e) {
-        console.error("Ошибка запуска распознавания:", e);
+  muteBtn.onclick = () => {
+    isMuted = !isMuted;
+    muteBtn.textContent = isMuted ? '🔇 Звук выключен' : '🔊 Звук включен';
+  };
+
+  function addMessage(text, role) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    div.className = `message ${role}`;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function sendToAssistant(text) {
+    addMessage('...', 'assistant');
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages: [
+            { role: "system", content: "Ты голосовой ассистент по имени Кот. Говори коротко и ясно." },
+            { role: "user", content: text }
+          ],
+          max_tokens: 400,
+          temperature: 0.7,
+        })
+      });
+
+      const data = await res.json();
+      chat.lastChild.textContent = data.choices[0].message.content;
+
+      if (!isMuted) {
+        speechSynthesis.cancel();
+        speechSynthesisUtterance = new SpeechSynthesisUtterance(data.choices[0].message.content);
+        speechSynthesisUtterance.lang = 'ru-RU';
+        speechSynthesis.speak(speechSynthesisUtterance);
       }
+    } catch (e) {
+      chat.lastChild.textContent = 'Ошибка при обращении к ассистенту';
+      console.error(e);
     }
+  }
+</script>
 
-    // Требование браузера — чтобы озвучка заработала, надо сначала кликнуть на страницу
-    document.body.addEventListener('click', () => {
-      speechSynthesis.speak(new SpeechSynthesisUtterance(''));
-    }, { once: true });
-
-    startListening();
-
-  </script>
 </body>
 </html>
