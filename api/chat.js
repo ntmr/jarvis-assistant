@@ -1,50 +1,40 @@
+const fetch = require('node-fetch');
+
 let cachedToken = null;
-let tokenExpiresAt = 0;
+let tokenExpireTime = 0;
+
+async function getAccessToken() {
+  const now = Date.now();
+  if (cachedToken && now < tokenExpireTime) {
+    return cachedToken;
+  }
+
+  // Запрос к своему эндпоинту для получения токена
+  const res = await fetch('http://localhost:3000/api/token'); // изменить URL если нужно
+  const data = await res.json();
+
+  if (!data.access_token) {
+    throw new Error('Не удалось получить access_token');
+  }
+
+  cachedToken = data.access_token;
+  tokenExpireTime = now + (30 * 60 * 1000) - (5 * 1000);
+
+  return cachedToken;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Метод не разрешён' });
   }
 
-  const clientId = process.env.GIGACHAT_CLIENT_ID;
-  const clientSecret = process.env.GIGACHAT_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    return res.status(500).json({ error: 'Не заданы GIGACHAT_CLIENT_ID или CLIENT_SECRET' });
-  }
-
   try {
-    const now = Date.now();
+    const accessToken = await getAccessToken();
 
-    // Если токен не получен или истек
-    if (!cachedToken || now >= tokenExpiresAt) {
-      const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-      const tokenRes = await fetch('https://ngw.devices.sberbank.ru:9443/api/v2/oauth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json',
-          'RqUID': crypto.randomUUID(),
-          'Authorization': `Basic ${basicAuth}`
-        },
-        body: 'scope=GIGACHAT_API_PERS'
-      });
-
-      const tokenData = await tokenRes.json();
-
-      if (!tokenRes.ok || !tokenData.access_token) {
-        return res.status(500).json({ error: 'Не удалось получить access_token', raw: tokenData });
-      }
-
-      cachedToken = tokenData.access_token;
-      tokenExpiresAt = now + 25 * 60 * 1000; // Кешируем на 25 минут
-    }
-
-    // Запрос к GigaChat
-    const chatRes = await fetch('https://gigachat.devices.sberbank.ru/api/v1/chat/completions', {
+    const response = await fetch('https://gigachat.devices.sberbank.ru/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${cachedToken}`,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -54,30 +44,22 @@ export default async function handler(req, res) {
       }),
     });
 
-    const rawText = await chatRes.text();
+    const text = await response.text();
 
     try {
-      const data = JSON.parse(rawText);
-
-      if (!data.choices || data.choices.length === 0) {
-        return res.status(500).json({ error: 'Пустой ответ от GigaChat' });
+      const data = JSON.parse(text);
+      if (data.error) {
+        return res.status(400).json({ error: data.error.message || data.error });
       }
-
-      // Приводим к формату OpenAI
-      return res.status(200).json({
-        choices: [
-          {
-            message: {
-              content: data.choices[0].message?.content || data.choices[0].text || 'Пусто'
-            }
-          }
-        ]
-      });
-    } catch (e) {
-      return res.status(500).json({ error: 'Ошибка JSON', raw: rawText });
+      if (!data.choices || data.choices.length === 0) {
+        return res.status(500).json({ error: 'Ответ GigaChat пуст' });
+      }
+      return res.status(200).json(data);
+    } catch (jsonErr) {
+      return res.status(500).json({ error: 'Ошибка JSON: ' + jsonErr.message, raw: text });
     }
 
   } catch (err) {
-    return res.status(500).json({ error: 'Ошибка сервера: ' + err.message });
+    return res.status(500).json({ error: 'Ошибка запроса к GigaChat: ' + err.message });
   }
 }
