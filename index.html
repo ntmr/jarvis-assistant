@@ -86,8 +86,10 @@
         })
       });
 
-      const data = await res.json();
-
+      const text = await res.text();
+      console.log('Ответ от сервера:', text);
+      const data = JSON.parse(text);
+      
       if (data.choices && data.choices[0] && data.choices[0].message) {
         const reply = data.choices[0].message.content;
         chat.lastChild.textContent = reply;
