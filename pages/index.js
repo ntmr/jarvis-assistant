@@ -1,5 +1,3 @@
-// pages/index.js
-
 import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
