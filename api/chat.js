@@ -1,40 +1,20 @@
-const fetch = require('node-fetch');
-
-let cachedToken = null;
-let tokenExpireTime = 0;
-
-async function getAccessToken() {
-  const now = Date.now();
-  if (cachedToken && now < tokenExpireTime) {
-    return cachedToken;
-  }
-
-  // Запрос к своему эндпоинту для получения токена
-  const res = await fetch('http://localhost:3000/api/token'); // изменить URL если нужно
-  const data = await res.json();
-
-  if (!data.access_token) {
-    throw new Error('Не удалось получить access_token');
-  }
-
-  cachedToken = data.access_token;
-  tokenExpireTime = now + (30 * 60 * 1000) - (5 * 1000);
-
-  return cachedToken;
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Метод не разрешён' });
   }
 
   try {
-    const accessToken = await getAccessToken();
+    const tokenRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/token`);
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      return res.status(500).json({ error: 'Нет access_token', details: tokenData });
+    }
 
     const response = await fetch('https://gigachat.devices.sberbank.ru/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${tokenData.access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -45,6 +25,7 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
+    console.log('Ответ GigaChat:', text);
 
     try {
       const data = JSON.parse(text);
@@ -56,10 +37,11 @@ export default async function handler(req, res) {
       }
       return res.status(200).json(data);
     } catch (jsonErr) {
-      return res.status(500).json({ error: 'Ошибка JSON: ' + jsonErr.message, raw: text });
+      console.error('Ошибка парсинга JSON от GigaChat:', jsonErr);
+      return res.status(500).json({ error: 'Ошибка JSON от GigaChat: ' + jsonErr.message, raw: text });
     }
-
   } catch (err) {
+    console.error('Ошибка запроса к GigaChat:', err);
     return res.status(500).json({ error: 'Ошибка запроса к GigaChat: ' + err.message });
   }
 }
