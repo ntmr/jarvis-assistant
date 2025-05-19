@@ -30,12 +30,22 @@ export default async function handler(req, res) {
       if (data.error) {
         return res.status(400).json({ error: data.error.message || data.error });
       }
+
       if (!data.choices || data.choices.length === 0) {
         return res.status(500).json({ error: 'Ответ GigaChat пуст' });
       }
-      return res.status(200).json(data);
+
+      return res.status(200).json({
+        choices: [
+          {
+            message: {
+              content: data.choices[0].message || data.choices[0].text || "Пустой ответ от GigaChat"
+            }
+          }
+        ]
+      });
     } catch (jsonErr) {
-      return res.status(500).json({ error: 'Ошибка JSON: ' + jsonErr.message, raw: text });
+      return res.status(500).json({ error: 'Ошибка парсинга JSON: ' + jsonErr.message, raw: text });
     }
   } catch (err) {
     return res.status(500).json({ error: 'Ошибка запроса к GigaChat: ' + err.message });
