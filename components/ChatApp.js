@@ -1,15 +1,17 @@
-import { useState } from 'react';
+// components/ChatApp.js
+import { useState, useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
-import AssistantIndicator from './AssistantIndicator';
 import AssistantAvatar from './AssistantAvatar';
+import AssistantIndicator from './AssistantIndicator';
 import ChatInput from './ChatInput';
 
 export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [isAssistantActive, setIsAssistantActive] = useState(false);
+  const chatRef = useRef(null);
 
   const handleSendMessage = async (message) => {
-    setMessages([...messages, { text: message, sender: 'user' }]);
+    setMessages((prev) => [...prev, { text: message, sender: 'user' }]);
     setIsAssistantActive(true);
 
     const response = await fetch('/api/deepseek', {
@@ -17,20 +19,21 @@ export default function ChatApp() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
     });
-    const data = await response.json();
 
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { text: data.answer, sender: 'assistant' },
-    ]);
+    const data = await response.json();
+    setMessages((prev) => [...prev, { text: data.answer, sender: 'assistant' }]);
     setIsAssistantActive(false);
   };
 
+  useEffect(() => {
+    chatRef.current?.scrollTo(0, chatRef.current.scrollHeight);
+  }, [messages]);
+
   return (
-    <div className="chat-container">
+    <div className="chat-wrapper">
       <AssistantIndicator isActive={isAssistantActive} />
       <AssistantAvatar />
-      <div className="chat-box">
+      <div className="chat-box" ref={chatRef}>
         {messages.map((msg, index) => (
           <MessageBubble key={index} message={msg} />
         ))}
