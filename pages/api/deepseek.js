@@ -1,8 +1,12 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Only POST allowed' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Метод не поддерживается' });
+  }
 
   const { message } = req.body;
-  if (!message) return res.status(400).json({ error: 'No message provided' });
+  if (!message) {
+    return res.status(400).json({ error: 'Отсутствует сообщение' });
+  }
 
   try {
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -22,14 +26,16 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      return res.status(500).json({ error });
+      const errorText = await response.text();
+      console.error('Ошибка от DeepSeek API:', errorText);
+      return res.status(500).json({ error: 'Ошибка при обращении к DeepSeek API' });
     }
 
     const data = await response.json();
     const answer = data.choices?.[0]?.message?.content || 'Ответ не получен.';
     res.status(200).json({ answer });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Внутренняя ошибка сервера:', error);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 }
