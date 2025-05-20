@@ -1,7 +1,8 @@
+// components/AssistantIndicator.js
 export default function AssistantIndicator({ isActive }) {
   return (
-    <div className={`assistant-indicator ${isActive ? 'active' : ''}`}>
-      {isActive ? 'Ассистент думает...' : 'Готов к работе'}
+    <div className="indicator">
+      {isActive ? 'Ассистент думает...' : 'Ожидает ваш голос'}
     </div>
   );
 }
