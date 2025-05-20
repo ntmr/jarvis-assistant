@@ -4,8 +4,14 @@ export default async function handler(req, res) {
   }
 
   const { message } = req.body;
+
   if (!message) {
     return res.status(400).json({ error: 'Missing message' });
+  }
+
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'API key is not set on server' });
   }
 
   try {
@@ -13,29 +19,34 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          { role: 'system', content: 'Ты дружелюбный голосовой ассистент, отвечай кратко и понятно.' },
-          { role: 'user', content: message }
+          { role: 'system', content: 'Ты голосовой помощник. Отвечай понятно и кратко.' },
+          { role: 'user', content: message },
         ],
-        temperature: 0.7
+        temperature: 0.7,
       }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Ошибка от DeepSeek API:', errorText);
-      return res.status(500).json({ error: 'Ошибка при обращении к DeepSeek API' });
+      console.error('DeepSeek API error:', data);
+      return res.status(500).json({ error: data.error || 'DeepSeek API error' });
     }
 
-    const data = await response.json();
-    const answer = data.choices?.[0]?.message?.content || 'Ответ не получен.';
+    const answer = data?.choices?.[0]?.message?.content;
+    if (!answer) {
+      console.error('No answer in response:', data);
+      return res.status(500).json({ error: 'Invalid response from DeepSeek' });
+    }
+
     res.status(200).json({ answer });
   } catch (error) {
-    console.error('Внутренняя ошибка сервера:', error);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    console.error('Server error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 }
