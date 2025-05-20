@@ -1,9 +1,8 @@
-// components/MessageBubble.js
-export default function MessageBubble({ message }) {
-  const isUser = message.sender === 'user';
+// components/AssistantAvatar.js
+export default function AssistantAvatar() {
   return (
-    <div className={`bubble-container ${isUser ? 'user' : 'assistant'}`}>
-      <div className="bubble">{message.text}</div>
+    <div className="avatar">
+      <img src="/robot-face.png" alt="Assistant Avatar" width={100} />
     </div>
   );
 }
