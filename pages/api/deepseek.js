@@ -9,23 +9,32 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch('https://api.deepseek.com/ask', {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
       },
-      body: JSON.stringify({ question: message }),
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          { role: 'user', content: message }
+        ],
+        stream: false
+      }),
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch from DeepSeek API');
+      const errorData = await response.json();
+      throw new Error(`DeepSeek API error: ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
-    res.status(200).json({ answer: data.answer });
+    const reply = data.choices?.[0]?.message?.content || 'No response';
+    res.status(200).json({ answer: reply });
   } catch (error) {
-    console.error(error);
+    console.error('DeepSeek API error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 }
